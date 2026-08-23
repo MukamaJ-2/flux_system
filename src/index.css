@@ -284,6 +284,7 @@ h3 { font-size: 1.2rem; }
   color: #fff;
   border: none;
   padding: 12px 20px;
+  min-height: 44px; /* touch-target minimum for mobile */
   border-radius: var(--radius-sm);
   font-weight: 700;
   cursor: pointer;
@@ -322,7 +323,9 @@ h3 { font-size: 1.2rem; }
   box-shadow: none;
 }
 .btn.full { width: 100%; }
-.btn.sm { padding: 8px 14px; font-size: 0.85rem; }
+.btn.sm, .btn.small { padding: 8px 14px; font-size: 0.85rem; min-height: 36px; }
+.btn.primary { background: linear-gradient(135deg, var(--teal), #0b675f); }
+.btn.success { background: linear-gradient(135deg, #19c087, #13a871); box-shadow: 0 10px 20px rgba(25, 192, 135, 0.2); }
 
 /* Badges & Pills */
 .pill {
@@ -761,14 +764,16 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--t
     box-shadow: 0 -12px 30px rgba(43, 34, 22, 0.08);
   }
   .bottom-nav-inner {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
+    display: flex;
+    justify-content: space-around;
+    gap: 4px;
     max-width: 560px;
     margin: 0 auto;
   }
   .bottom-nav-inner a {
+    flex: 1;
     min-width: 0;
+    min-height: 48px; /* touch-target minimum for mobile */
     padding: 8px 6px;
     border-radius: 16px;
     display: flex;
@@ -809,7 +814,105 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--t
   .page-intro, .page-top-row, .section-heading, .page-footer-links, .info-row { flex-direction: column; align-items: flex-start; gap: 12px; }
   .welcome-banner { flex-direction: column; align-items: flex-start; padding: 24px; }
   .welcome-name { font-size: 2rem; }
+
+  /* v2 feature pages (Contributions, Loans, Investments, Meetings,
+     Settings, Members, Audit) — tighter padding and stacked actions so
+     nothing overflows a phone-width viewport. */
+  .card-box { padding: 16px; }
+  .list-item { flex-wrap: wrap; }
+  .req-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .req-actions { flex-wrap: wrap; }
+  .req-actions .btn { flex: 1; min-width: 100px; }
 }
+
+/* Card Box — generic bordered surface used for form containers, info
+   panels, and stat groupings across the v2 feature pages (Contributions,
+   Loans, Investments, Meetings, Settings, Members). */
+.card-box {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Generic forms — the shared shape used by every submit/log/compose form
+   in the v2 feature pages. `.form-input` and the bare selectors both
+   apply so a field works whether or not it's explicitly classed. */
+.flux-form { display: flex; flex-direction: column; gap: 20px; }
+.auth-form { display: flex; flex-direction: column; gap: 20px; }
+.form-group { display: flex; flex-direction: column; gap: 8px; }
+.form-group label { font-size: 0.9rem; font-weight: 600; color: var(--text-strong); }
+.form-input,
+.flux-form input,
+.flux-form select,
+.flux-form textarea,
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  min-height: 44px; /* touch-target minimum for mobile */
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.flux-form textarea, .form-group textarea { min-height: 96px; }
+.flux-form input:focus, .flux-form select:focus, .flux-form textarea:focus,
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus,
+.form-input:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--emerald-soft);
+}
+input[type="checkbox"], input[type="radio"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--teal);
+  cursor: pointer;
+}
+
+/* List rows — the shared "history/inbox" pattern (Home notices, a
+   member's own contribution/loan history, meeting minutes, audit log). */
+.list-group { display: flex; flex-direction: column; gap: 10px; }
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  min-height: 44px;
+}
+.list-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.list-text { flex: 1; min-width: 0; }
+.list-text > div:first-child { font-weight: 600; color: var(--text-strong); word-break: break-word; }
+
+/* Typography / spacing utilities used inline across the feature pages */
+.text-muted { color: var(--muted); }
+.text-sm { font-size: 0.85rem; }
+.text-success { color: var(--teal); font-weight: 600; }
+.mt-1 { margin-top: 16px; }
+.req-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.95rem; color: var(--text); }
+
+/* Wide tables (e.g. Members' role matrix) scroll horizontally inside their
+   own box instead of overflowing the page on narrow screens. */
+.table-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--line); }
+.table-wrap table { min-width: 480px; }
 
 /* Tabs */
 .tab-row {
