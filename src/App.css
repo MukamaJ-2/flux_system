@@ -1,0 +1,27 @@
+/* App-level structural helpers for the redesigned FLUX experience */
+
+.app-shell main {
+  width: 100%;
+}
+
+.page-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.hero-copy {
+  max-width: 620px;
+}
+
+.hero-copy p {
+  margin-top: 10px;
+}
+
+.spaced-section {
+  margin-top: 22px;
+}
+
+.mono {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
