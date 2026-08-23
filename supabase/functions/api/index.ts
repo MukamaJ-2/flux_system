@@ -96,9 +96,11 @@ async function writeAuditLog(actorId: string, action: string, targetTable: strin
 
 async function serializeProfile(p: any) {
   const { data: roleRows } = await supabase.from("member_roles").select("role").eq("member_id", p.id);
+  const { data: authUser } = await supabase.auth.admin.getUserById(p.id);
   return {
     id: p.id,
     fullName: p.full_name,
+    email: authUser?.user?.email || "",
     phone: p.phone,
     avatar: p.avatar,
     isActive: p.is_active,
@@ -263,6 +265,58 @@ app.patch("/api/members/:id/active/", async (c) => {
   const { data: updated } = await supabase.from("profiles").update({ is_active: !!body.isActive }).eq("id", c.req.param("id")).select("*").maybeSingle();
   await writeAuditLog(user.id, "set_active", "profiles", c.req.param("id"), null, { isActive: !!body.isActive });
   return json(await serializeProfile(updated));
+});
+
+// POST /api/members/:id/reset-password/  (Chair only) — for a member who
+// already has an account (forgot their password, etc.), not a fresh invite.
+// Same link-copy approach as inviting: generates the link directly instead
+// of routing through Supabase's rate-limited default mailer.
+app.post("/api/members/:id/reset-password/", async (c) => {
+  const user = await requireAuth(c.req.raw);
+  if (user instanceof Response) return user;
+  if (!hasRole(user, "chair")) return errorResponse("Only the Chair can reset a member's password.", 403);
+
+  const targetId = c.req.param("id");
+  const { data: authUser, error: lookupError } = await supabase.auth.admin.getUserById(targetId);
+  if (lookupError || !authUser?.user?.email) return errorResponse("Member not found.", 404);
+
+  const { data: linked, error } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email: authUser.user.email,
+    options: { redirectTo: `${SITE_URL}/set-password` },
+  });
+  if (error) return errorResponse(error.message, 400);
+
+  await writeAuditLog(user.id, "reset_password", "profiles", targetId, null, { email: authUser.user.email });
+  return json({ id: targetId, email: authUser.user.email, link: linked.properties.action_link });
+});
+
+// DELETE /api/members/:id/  (Chair only) — blocked by the database if the
+// member already has financial history (ledger_entries/contributions/loans
+// reference them with no cascade, on purpose) — deactivate those members
+// instead of deleting them, so the ledger never loses an identity it
+// points to.
+app.delete("/api/members/:id/", async (c) => {
+  const user = await requireAuth(c.req.raw);
+  if (user instanceof Response) return user;
+  if (!hasRole(user, "chair")) return errorResponse("Only the Chair can delete a member.", 403);
+
+  const targetId = c.req.param("id");
+  if (targetId === user.id) return errorResponse("You cannot delete your own account.", 400);
+
+  const { error } = await supabase.auth.admin.deleteUser(targetId);
+  if (error) {
+    const blocked = /foreign key|violates|constraint/i.test(error.message);
+    return errorResponse(
+      blocked
+        ? "This member has contributions, loans, or ledger history and can't be deleted — deactivate their account instead."
+        : error.message,
+      400,
+    );
+  }
+
+  await writeAuditLog(user.id, "delete_member", "profiles", targetId, null, null);
+  return new Response(null, { status: 204 });
 });
 
 // ─── Group settings ──────────────────────────────────────────────────────────

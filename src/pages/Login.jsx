@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 
 export default function Login() {
   const location = useLocation()
@@ -9,6 +10,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
 
   const from = location.state?.from?.pathname || '/'
 
@@ -32,6 +35,23 @@ export default function Login() {
     if (!result.success) {
       setError(result.error)
     }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError('Enter your email address above first, then tap "Forgot password?".')
+      return
+    }
+    setError('')
+    setResetLoading(true)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/set-password`,
+    })
+    setResetLoading(false)
+    // Supabase returns success even for an unknown email (avoids leaking
+    // which addresses have accounts) — show the same message either way.
+    if (resetError) setError(resetError.message)
+    else setResetSent(true)
   }
 
   return (
@@ -80,6 +100,22 @@ export default function Login() {
               {loading ? <span className="spinner" /> : 'Sign In'}
             </button>
           </form>
+
+          <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            {resetSent ? (
+              <p className="text-success">Check your email for a password reset link.</p>
+            ) : (
+              <button
+                type="button"
+                className="link-action"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.9rem' }}
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+              >
+                {resetLoading ? 'Sending…' : 'Forgot password?'}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="auth-hero">

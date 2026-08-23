@@ -14,6 +14,8 @@ export default function Members() {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [invited, setInvited] = useState(null)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [linkModal, setLinkModal] = useState(null) // { email, link } — reset-password link
+  const [deleteError, setDeleteError] = useState('')
 
   function authHeaders() {
     return {
@@ -87,6 +89,34 @@ export default function Members() {
     }
   }
 
+  async function handleResetPassword(member) {
+    const res = await fetch(`${API_URL}/members/${member.id}/reset-password/`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    const body = await res.json()
+    if (res.ok) {
+      setLinkModal(body)
+    } else {
+      window.alert(body.error || 'Failed to generate a password reset link.')
+    }
+  }
+
+  async function handleDelete(member) {
+    setDeleteError('')
+    if (!window.confirm(`Delete ${member.fullName || member.email}? This cannot be undone.`)) return
+    const res = await fetch(`${API_URL}/members/${member.id}/`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    })
+    if (res.ok || res.status === 204) {
+      setMembers((prev) => prev.filter((m) => m.id !== member.id))
+    } else {
+      const body = await res.json().catch(() => ({}))
+      setDeleteError(body.error || 'Failed to delete member.')
+    }
+  }
+
   const closeInviteModal = () => {
     setShowInvite(false)
     setInvited(null)
@@ -111,11 +141,14 @@ export default function Members() {
         <button className="btn" onClick={() => setShowInvite(true)}>+ Invite Member</button>
       </div>
 
+      {deleteError && <div className="alert alert-danger" style={{ marginTop: '16px' }}><span>⚠</span> {deleteError}</div>}
+
       <div className="table-wrap" style={{ overflowX: 'auto', marginTop: '16px' }}>
         <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '2px solid var(--border)' }}>
               <th style={{ padding: '0.5rem' }}>Name</th>
+              <th style={{ padding: '0.5rem' }}>Email</th>
               <th style={{ padding: '0.5rem' }}>Status</th>
               {ROLES.map((r) => (
                 <th key={r} style={{ padding: '0.5rem' }}>{r.charAt(0).toUpperCase() + r.slice(1)}</th>
@@ -127,6 +160,7 @@ export default function Members() {
             {members.map((m) => (
               <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
                 <td style={{ padding: '0.75rem 0.5rem' }}><strong>{m.fullName || m.id}</strong></td>
+                <td style={{ padding: '0.75rem 0.5rem' }} className="text-sm text-muted">{m.email}</td>
                 <td style={{ padding: '0.75rem 0.5rem' }}>
                   {m.isActive ? <span className="pill success">Active</span> : <span className="pill danger">Inactive</span>}
                 </td>
@@ -143,13 +177,23 @@ export default function Members() {
                     </td>
                   )
                 })}
-                <td style={{ padding: '0.75rem 0.5rem' }}>
+                <td style={{ padding: '0.75rem 0.5rem', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     className="btn secondary small"
                     onClick={() => toggleActive(m)}
                     disabled={m.id === profile?.id}
                   >
                     {m.isActive ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button className="btn secondary small" onClick={() => handleResetPassword(m)}>
+                    Reset Password
+                  </button>
+                  <button
+                    className="btn danger-sm"
+                    onClick={() => handleDelete(m)}
+                    disabled={m.id === profile?.id}
+                  >
+                    Delete
                   </button>
                 </td>
               </tr>
@@ -225,6 +269,25 @@ export default function Members() {
                 </form>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {linkModal && (
+        <div className="modal-overlay" onClick={() => setLinkModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-icon success">🔑</div>
+            <h3 className="modal-title">Password Reset Link</h3>
+            <p className="modal-body">
+              Share this link with <strong>{linkModal.email}</strong> — it lets them set a new password.
+            </p>
+            <div className="card-box" style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+              {linkModal.link}
+            </div>
+            <div className="modal-actions">
+              <button className="btn secondary" onClick={() => navigator.clipboard.writeText(linkModal.link)}>Copy Link</button>
+              <button className="btn" onClick={() => setLinkModal(null)}>Done</button>
+            </div>
           </div>
         </div>
       )}
