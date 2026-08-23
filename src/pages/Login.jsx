@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
-import { getDashboardPathForRole, useAuth } from '../context/AuthContext'
+import { Navigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const navigate = useNavigate()
   const location = useLocation()
-  const { signIn } = useAuth()
+  const { session, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -13,16 +12,24 @@ export default function Login() {
 
   const from = location.state?.from?.pathname || '/'
 
+  // Already signed in — /login has no guard of its own (it has to be public
+  // so a signed-out visitor can reach it), so without this check a valid
+  // session landing here renders the login form *underneath* the app shell
+  // instead of just going to the dashboard.
+  if (session) {
+    return <Navigate to={from} replace />
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
     setLoading(true)
     const result = await signIn({ email, password })
     setLoading(false)
-    if (result.success) {
-      const nextPath = from === '/' ? getDashboardPathForRole(result.user?.role) : from
-      navigate(nextPath, { replace: true })
-    } else {
+    // No explicit navigate() here — a successful sign-in updates `session`
+    // via AuthContext's onAuthStateChange listener, which re-renders this
+    // component straight into the redirect check above.
+    if (!result.success) {
       setError(result.error)
     }
   }
@@ -37,7 +44,7 @@ export default function Login() {
               <span className="auth-logo-name">FLUX</span>
             </div>
             <h1 className="auth-title">Welcome back</h1>
-            <p className="auth-subtitle">Sign in to your FLUX account to manage your savings groups.</p>
+            <p className="auth-subtitle">Sign in to your FLUX account to manage your savings group.</p>
           </div>
 
           {error && (
@@ -73,20 +80,17 @@ export default function Login() {
               {loading ? <span className="spinner" /> : 'Sign In'}
             </button>
           </form>
-
-          {/* Demo credentials removed - use real accounts */}
-
         </div>
 
         <div className="auth-hero">
           <div className="auth-hero-content">
             <div className="auth-hero-icon">💎</div>
             <h2>Group savings, made simple.</h2>
-            <p>Manage contributions, track payouts, and keep every member aligned — all from one place.</p>
+            <p>Manage contributions, track loans, and keep every member aligned — all from one place.</p>
             <div className="auth-features">
-              <div className="auth-feature"><span>✓</span> Admin-controlled groups</div>
-              <div className="auth-feature"><span>✓</span> Member contribution requests</div>
-              <div className="auth-feature"><span>✓</span> Transparent audit trail</div>
+              <div className="auth-feature"><span>✓</span> Role-based responsibilities</div>
+              <div className="auth-feature"><span>✓</span> Dual-approval on every loan</div>
+              <div className="auth-feature"><span>✓</span> A transparent, tamper-evident ledger</div>
             </div>
           </div>
         </div>

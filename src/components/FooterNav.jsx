@@ -1,16 +1,13 @@
 import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function FooterNav() {
   const loc = useLocation()
+  const { profile } = useAuth()
 
-  if (!(
-    loc.pathname === '/' ||
-    loc.pathname === '/groups' ||
-    loc.pathname === '/loans' ||
-    loc.pathname === '/goals' ||
-    loc.pathname === '/profile'
-  )) {
+  const FOOTER_PATHS = ['/', '/contributions', '/loans', '/members', '/profile']
+  if (!FOOTER_PATHS.includes(loc.pathname)) {
     return null
   }
 
@@ -21,20 +18,22 @@ export default function FooterNav() {
           <span className="icon">⌂</span>
           <span className="label">Home</span>
         </Link>
-        <Link to="/groups" className={loc.pathname === '/groups' ? 'active' : ''}>
-          <span className="icon">◌</span>
-          <span className="label">Groups</span>
+        <Link to="/contributions" className={loc.pathname === '/contributions' ? 'active' : ''}>
+          <span className="icon">💰</span>
+          <span className="label">Contributions</span>
         </Link>
         <Link to="/loans" className={loc.pathname === '/loans' ? 'active' : ''}>
           <span className="icon">¤</span>
           <span className="label">Loans</span>
         </Link>
-        <Link to="/goals" className={loc.pathname === '/goals' ? 'active' : ''}>
-          <span className="icon">◎</span>
-          <span className="label">Goals</span>
-        </Link>
+        {profile?.roles?.includes('chair') && (
+          <Link to="/members" className={loc.pathname === '/members' ? 'active' : ''}>
+            <span className="icon">◔</span>
+            <span className="label">Members</span>
+          </Link>
+        )}
         <Link to="/profile" className={loc.pathname === '/profile' ? 'active' : ''}>
-          <span className="icon">◔</span>
+          <span className="icon">◎</span>
           <span className="label">Profile</span>
         </Link>
       </div>

@@ -2,9 +2,9 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function ChangePassword() {
+export default function SetPassword() {
   const navigate = useNavigate()
-  const { changePassword, user } = useAuth()
+  const { setPassword, profile } = useAuth()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
@@ -24,11 +24,11 @@ export default function ChangePassword() {
     }
 
     setLoading(true)
-    const result = await changePassword({ newPassword, confirmPassword })
+    const result = await setPassword(newPassword)
     if (result.success) {
       navigate('/')
     } else {
-      setError(result.error || 'Failed to update password.')
+      setError(result.error || 'Failed to set password.')
     }
     setLoading(false)
   }
@@ -44,8 +44,8 @@ export default function ChangePassword() {
             </div>
             <h1 className="auth-title">Set Your Password</h1>
             <p className="auth-subtitle">
-              Welcome, <strong>{user?.first_name || user?.email}</strong>! Your account was created by
-              an admin. Please set a new password before continuing.
+              Welcome{profile?.fullName ? `, ${profile.fullName}` : ''}! Set a password to finish
+              setting up your account.
             </p>
           </div>
 
@@ -96,7 +96,7 @@ export default function ChangePassword() {
               color: 'var(--text-secondary, #888)',
             }}
           >
-            🔒 You must set a new password before accessing the system. This is a one-time step.
+            🔒 You must set a password before accessing the system. This is a one-time step.
           </div>
         </div>
       </div>

@@ -5,33 +5,26 @@ import { useTheme } from '../context/ThemeContext'
 
 const TITLES = {
   '/': 'Dashboard',
-  '/groups': 'My Groups',
+  '/contributions': 'Contributions',
   '/loans': 'Loans',
-  '/goals': 'Goals',
+  '/meetings': 'Meetings',
+  '/investments': 'Investments',
+  '/audit': 'Audit',
+  '/members': 'Members',
+  '/settings': 'Group Settings',
   '/profile': 'Profile',
-  '/admin': 'Admin Panel',
-  '/join': 'Join a Group',
-  '/groups/new': 'Create Group',
 }
 
 export default function TopBar() {
-  const { user, signOut } = useAuth()
+  const { session, profile } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
 
-  const title = Object.entries(TITLES).find(([path]) => location.pathname === path)?.[1]
-    || (location.pathname.includes('/requests') ? 'Pending Requests'
-    : location.pathname.includes('/settings') ? 'Group Settings'
-    : location.pathname.includes('/record') ? 'Record Contribution'
-    : location.pathname.includes('/submit') ? 'Submit Request'
-    : location.pathname.includes('/records') ? 'Contribution Records'
-    : location.pathname.includes('/groups/') ? 'Group Details'
-    : 'FLUX')
-
+  const title = TITLES[location.pathname] || 'FLUX'
   const canGoBack = !Object.keys(TITLES).includes(location.pathname)
 
-  if (!user) return null
+  if (!session) return null
 
   return (
     <header className="topbar">
@@ -44,19 +37,19 @@ export default function TopBar() {
         <h1 className="topbar-title">{title}</h1>
       </div>
       <div className="topbar-right">
-        <button 
-          onClick={toggleTheme} 
-          className="topbar-back" 
+        <button
+          onClick={toggleTheme}
+          className="topbar-back"
           aria-label="Toggle Theme"
           style={{ fontSize: '1.2rem' }}
         >
           {theme === 'light' ? '🌙' : '☀️'}
         </button>
         <div className="topbar-user">
-          <div className="topbar-avatar">{user.avatar || user.fullName?.slice(0, 2).toUpperCase()}</div>
+          <div className="topbar-avatar">{profile?.avatar || profile?.fullName?.slice(0, 2).toUpperCase()}</div>
           <div className="topbar-info">
-            <div className="topbar-name">{user.fullName}</div>
-            <div className="topbar-role">{user.role}</div>
+            <div className="topbar-name">{profile?.fullName}</div>
+            <div className="topbar-role">{(profile?.roles || []).join(', ') || 'Member'}</div>
           </div>
         </div>
       </div>

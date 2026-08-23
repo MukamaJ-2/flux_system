@@ -1,184 +1,109 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 import { API_URL, SUPABASE_ANON_KEY } from '../config'
-import {
-  getDashboardPathForRole,
-  hasPermission,
-  hasAnyRole,
-  canManageGroup,
-  getRole,
-} from '../utils/permissions'
-
-export { getDashboardPathForRole }
 
 const AuthContext = createContext({
-  user: null,
+  session: null,
+  profile: null,
   loading: true,
-  mustChangePassword: false,
-  isSysadmin: false,
-  isChair: false,
-  isTreasury: false,
-  isSecretary: false,
-  isAudit: false,
-  isMobilizer: false,
-  isMember: false,
-  isAdmin: false,
+  mustSetPassword: false,
+  hasRole: () => false,
+  hasAnyRole: () => false,
   signIn: async () => {},
   signOut: () => {},
-  changePassword: async () => {},
   updateProfile: async () => {},
-  createUser: async () => {},
 })
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+// Supabase appends `type=invite` or `type=recovery` to the redirect URL
+// hash when a member follows their invite/password-reset email. That's how
+// we know to route them to /set-password instead of the normal dashboard —
+// there's no `must_change_password` flag in the new schema; the session
+// itself carries this.
+function detectMustSetPassword() {
+  const hash = window.location.hash || ''
+  return hash.includes('type=invite') || hash.includes('type=recovery')
+}
 
-  // Restore session on mount
-  useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem('flux_access_token')
-      if (token) {
-        try {
-          const res = await fetch(`${API_URL}/users/me/`, {
-            headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
-          })
-          if (res.ok) {
-            setUser(await res.json())
-          } else {
-            localStorage.removeItem('flux_access_token')
-            localStorage.removeItem('flux_refresh_token')
-          }
-        } catch {
-          // network error — keep user logged out
-        }
-      }
-      setLoading(false)
+export function AuthProvider({ children }) {
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [mustSetPassword, setMustSetPassword] = useState(detectMustSetPassword)
+
+  async function fetchProfile(accessToken) {
+    try {
+      const res = await fetch(`${API_URL}/me/`, {
+        headers: { Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
+      })
+      if (res.ok) setProfile(await res.json())
+      else setProfile(null)
+    } catch {
+      setProfile(null)
     }
-    fetchUser()
+  }
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      setSession(data.session)
+      if (data.session) await fetchProfile(data.session.access_token)
+      setLoading(false)
+    })
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      setSession(newSession)
+      if (event === "PASSWORD_RECOVERY") setMustSetPassword(true)
+      if (newSession) await fetchProfile(newSession.access_token)
+      else setProfile(null)
+    })
+
+    return () => subscription.subscription.unsubscribe()
   }, [])
 
   const value = useMemo(
     () => ({
-      user,
+      session,
+      profile,
       loading,
-      mustChangePassword: user?.must_change_password === true,
+      mustSetPassword,
 
-      // Role helpers used across the app
-      role: getRole(user),
-      isSysadmin: user?.role === 'sysadmin',
-      isChair: user?.role === 'chair',
-      isTreasury: user?.role === 'treasury',
-      isSecretary: user?.role === 'secretary',
-      isAudit: user?.role === 'audit',
-      isMobilizer: user?.role === 'mobilizer',
-      isMember: user?.role === 'member',
-      hasPermission: (permission) => hasPermission(user, permission),
-      hasAnyRole: (...roles) => hasAnyRole(user, ...roles),
-      canManageGroup: (group) => canManageGroup(user, group),
-      // Legacy alias: chair/sysadmin or group admin
-      isAdmin: user?.role === 'sysadmin' || user?.role === 'chair',
+      hasRole: (role) => !!profile?.roles?.includes(role),
+      hasAnyRole: (...roles) => roles.some((r) => profile?.roles?.includes(r)),
 
-      // ── Sign In ───────────────────────────────────────────────────────────
       signIn: async ({ email, password }) => {
-        try {
-          const tokenRes = await fetch(`${API_URL}/token/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
-            body: JSON.stringify({ email, password }),
-          })
-          if (!tokenRes.ok) return { success: false, error: 'Invalid email or password' }
-
-          const tokens = await tokenRes.json()
-          localStorage.setItem('flux_access_token', tokens.access)
-          localStorage.setItem('flux_refresh_token', tokens.refresh)
-
-          const userRes = await fetch(`${API_URL}/users/me/`, {
-            headers: { Authorization: `Bearer ${tokens.access}`, apikey: SUPABASE_ANON_KEY },
-          })
-          if (userRes.ok) {
-            const userData = await userRes.json()
-            setUser(userData)
-            return { success: true, user: userData }
-          }
-          return { success: false, error: 'Failed to fetch user profile' }
-        } catch (e) {
-          return { success: false, error: 'Network error. Is the backend running?' }
-        }
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) return { success: false, error: error.message === 'Invalid login credentials' ? 'Invalid email or password' : error.message }
+        await fetchProfile(data.session.access_token)
+        return { success: true }
       },
 
-      // ── Sign Out ──────────────────────────────────────────────────────────
-      signOut: () => {
-        localStorage.removeItem('flux_access_token')
-        localStorage.removeItem('flux_refresh_token')
-        setUser(null)
+      signOut: async () => {
+        await supabase.auth.signOut()
+        setProfile(null)
       },
 
-      // ── Change Password (forced on first login) ───────────────────────────
-      changePassword: async ({ newPassword, confirmPassword }) => {
-        try {
-          const res = await fetch(`${API_URL}/users/change-password/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('flux_access_token')}`,
-              apikey: SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({
-              new_password: newPassword,
-              confirm_password: confirmPassword,
-            }),
-          })
-          const body = await res.json()
-          if (res.ok) {
-            // Re-fetch the updated user profile (must_change_password = false)
-            const userRes = await fetch(`${API_URL}/users/me/`, {
-              headers: { Authorization: `Bearer ${localStorage.getItem('flux_access_token')}`, apikey: SUPABASE_ANON_KEY },
-            })
-            if (userRes.ok) setUser(await userRes.json())
-            return { success: true }
-          }
-          return { success: false, error: body.error || 'Failed to change password.' }
-        } catch (e) {
-          return { success: false, error: 'Network error. Is the backend running?' }
-        }
+      setPassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({ password: newPassword })
+        if (error) return { success: false, error: error.message }
+        setMustSetPassword(false)
+        return { success: true }
       },
 
-      // ── Admin: Create a new user ──────────────────────────────────────────
-      createUser: async ({ fullName, email, phone, role }) => {
-        try {
-          const res = await fetch(`${API_URL}/users/create/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('flux_access_token')}`,
-              apikey: SUPABASE_ANON_KEY,
-            },
-            body: JSON.stringify({ fullName, email, phone, role }),
-          })
-          const body = await res.json()
-          if (res.ok) return { success: true, data: body }
-          return { success: false, error: body.error || 'Failed to create user.' }
-        } catch (e) {
-          return { success: false, error: 'Network error. Is the backend running?' }
-        }
-      },
-
-      // ── Update own profile ────────────────────────────────────────────────
       updateProfile: async (patch) => {
+        if (!session) return { success: false, error: 'Not signed in' }
         try {
-          const res = await fetch(`${API_URL}/users/me/`, {
+          const res = await fetch(`${API_URL}/me/`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('flux_access_token')}`,
+              Authorization: `Bearer ${session.access_token}`,
               apikey: SUPABASE_ANON_KEY,
             },
             body: JSON.stringify(patch),
           })
           if (res.ok) {
             const updated = await res.json()
-            setUser(updated)
-            return { success: true, user: updated }
+            setProfile(updated)
+            return { success: true, profile: updated }
           }
           const err = await res.json().catch(() => ({}))
           return { success: false, error: err.error || 'Failed to update profile' }
@@ -187,7 +112,7 @@ export function AuthProvider({ children }) {
         }
       },
     }),
-    [user, loading]
+    [session, profile, loading, mustSetPassword],
   )
 
   if (loading) {
