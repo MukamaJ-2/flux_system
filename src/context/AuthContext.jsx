@@ -14,21 +14,16 @@ const AuthContext = createContext({
   updateProfile: async () => {},
 })
 
-// Supabase appends `type=invite` or `type=recovery` to the redirect URL
-// hash when a member follows their invite/password-reset email. That's how
-// we know to route them to /set-password instead of the normal dashboard —
-// there's no `must_change_password` flag in the new schema; the session
-// itself carries this.
-function detectMustSetPassword() {
-  const hash = window.location.hash || ''
-  return hash.includes('type=invite') || hash.includes('type=recovery')
-}
-
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [mustSetPassword, setMustSetPassword] = useState(detectMustSetPassword)
+
+  // Members are onboarded with a shared default password and forced onto
+  // one of their own on first login — this flag comes straight from their
+  // profile row, not from a URL/session artifact (no email-link flow to
+  // depend on anymore).
+  const mustSetPassword = profile?.mustChangePassword === true
 
   async function fetchProfile(accessToken) {
     try {
@@ -51,7 +46,6 @@ export function AuthProvider({ children }) {
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       setSession(newSession)
-      if (event === "PASSWORD_RECOVERY") setMustSetPassword(true)
       if (newSession) await fetchProfile(newSession.access_token)
       else setProfile(null)
     })
@@ -82,9 +76,15 @@ export function AuthProvider({ children }) {
       },
 
       setPassword: async (newPassword) => {
-        const { error } = await supabase.auth.updateUser({ password: newPassword })
+        const { data, error } = await supabase.auth.updateUser({ password: newPassword })
         if (error) return { success: false, error: error.message }
-        setMustSetPassword(false)
+        // Clear the forced-change flag server-side, then refetch the
+        // profile so `mustSetPassword` (derived from it) updates too.
+        await fetch(`${API_URL}/me/confirm-password-change/`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: SUPABASE_ANON_KEY },
+        }).catch(() => {})
+        await fetchProfile(data.session.access_token)
         return { success: true }
       },
 

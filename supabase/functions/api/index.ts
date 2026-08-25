@@ -12,12 +12,6 @@ import { cors } from "jsr:@hono/hono@4.6.14/cors";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-// The project's dashboard "Site URL" auth setting isn't reliable to depend on
-// (it defaults to localhost:3000 and changing it needs dashboard access this
-// function doesn't have) — so invite links pass their redirect explicitly
-// instead of relying on that project-wide default. Override via the SITE_URL
-// secret once a real production URL exists.
-const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -51,6 +45,16 @@ function errorResponse(message: string, status = 400) {
 }
 
 const ROLES = ["chair", "treasurer", "secretary", "mobilizer", "auditor"] as const;
+
+// Shared, guessable-on-purpose default password (same pattern the group can
+// announce verbally: "this month's default is Flux@Aug2026!"). Every account
+// created or reset with this is flagged must_change_password so it can only
+// ever be used once before the member is forced onto a password of their own.
+function generateDefaultPassword(): string {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const now = new Date();
+  return `Flux@${months[now.getMonth()]}${now.getFullYear()}!`;
+}
 
 async function getAuthUser(req: Request): Promise<any | null> {
   const auth = req.headers.get("Authorization");
@@ -105,6 +109,7 @@ async function serializeProfile(p: any) {
     avatar: p.avatar,
     isActive: p.is_active,
     joinedAt: p.joined_at,
+    mustChangePassword: p.must_change_password,
     roles: (roleRows || []).map((r: any) => r.role),
   };
 }
@@ -171,8 +176,19 @@ app.get("/api/me/", async (c) => {
     phone: user.phone,
     avatar: user.avatar,
     isActive: user.is_active,
+    mustChangePassword: user.must_change_password,
     roles: user.roles,
   });
+});
+
+// POST /api/me/confirm-password-change/ — called right after the client
+// successfully calls supabase.auth.updateUser({ password }), so the forced
+// change-password redirect stops firing for this account going forward.
+app.post("/api/me/confirm-password-change/", async (c) => {
+  const user = await requireAuth(c.req.raw);
+  if (user instanceof Response) return user;
+  await supabase.from("profiles").update({ must_change_password: false }).eq("id", user.id);
+  return json({ success: true });
 });
 
 app.patch("/api/me/", async (c) => {
@@ -198,13 +214,11 @@ app.get("/api/members/", async (c) => {
 });
 
 // POST /api/members/invite/  (Chair only) — creates the Supabase Auth user
-// and returns a one-time set-password link for the Chair to share directly
-// (WhatsApp, SMS, in person) instead of routing through Supabase's built-in
-// mailer. That mailer is fine for occasional use but rate-limits hard
-// (a handful of emails/hour) unless a custom SMTP provider is configured —
-// not something to depend on for onboarding a whole group. `handle_new_user`
-// still creates the profiles row the moment the auth user is created, same
-// as before.
+// with a shared default password (rather than an email invite link — this
+// project's email-link flow depends on Auth dashboard settings this token
+// can't configure, and Supabase's default mailer rate-limits hard). The
+// Chair shares the password directly; the account is flagged
+// must_change_password so it's forced onto a real password on first login.
 app.post("/api/members/invite/", async (c) => {
   const user = await requireAuth(c.req.raw);
   if (user instanceof Response) return user;
@@ -216,18 +230,17 @@ app.post("/api/members/invite/", async (c) => {
   const phone = (body.phone || "").trim();
   if (!email || !fullName) return errorResponse("Full name and email are required.", 400);
 
-  const { data: linked, error } = await supabase.auth.admin.generateLink({
-    type: "invite",
+  const defaultPassword = generateDefaultPassword();
+  const { data: created, error } = await supabase.auth.admin.createUser({
     email,
-    options: {
-      data: { full_name: fullName, phone },
-      redirectTo: `${SITE_URL}/set-password`,
-    },
+    password: defaultPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, phone, must_change_password: true },
   });
   if (error) return errorResponse(error.message, 400);
 
-  await writeAuditLog(user.id, "invite_member", "profiles", linked.user!.id, null, { email, fullName });
-  return json({ id: linked.user!.id, email, link: linked.properties.action_link }, 201);
+  await writeAuditLog(user.id, "invite_member", "profiles", created.user!.id, null, { email, fullName });
+  return json({ id: created.user!.id, email, defaultPassword }, 201);
 });
 
 // PATCH /api/members/:id/roles/  (Chair only) — body: { role, grant: boolean }
@@ -268,9 +281,9 @@ app.patch("/api/members/:id/active/", async (c) => {
 });
 
 // POST /api/members/:id/reset-password/  (Chair only) — for a member who
-// already has an account (forgot their password, etc.), not a fresh invite.
-// Same link-copy approach as inviting: generates the link directly instead
-// of routing through Supabase's rate-limited default mailer.
+// already has an account (forgot their password, etc.). Sets a fresh
+// shared default password directly and re-flags must_change_password, same
+// mechanism as a new invite — no email link involved.
 app.post("/api/members/:id/reset-password/", async (c) => {
   const user = await requireAuth(c.req.raw);
   if (user instanceof Response) return user;
@@ -280,15 +293,13 @@ app.post("/api/members/:id/reset-password/", async (c) => {
   const { data: authUser, error: lookupError } = await supabase.auth.admin.getUserById(targetId);
   if (lookupError || !authUser?.user?.email) return errorResponse("Member not found.", 404);
 
-  const { data: linked, error } = await supabase.auth.admin.generateLink({
-    type: "recovery",
-    email: authUser.user.email,
-    options: { redirectTo: `${SITE_URL}/set-password` },
-  });
+  const defaultPassword = generateDefaultPassword();
+  const { error } = await supabase.auth.admin.updateUserById(targetId, { password: defaultPassword });
   if (error) return errorResponse(error.message, 400);
+  await supabase.from("profiles").update({ must_change_password: true }).eq("id", targetId);
 
   await writeAuditLog(user.id, "reset_password", "profiles", targetId, null, { email: authUser.user.email });
-  return json({ id: targetId, email: authUser.user.email, link: linked.properties.action_link });
+  return json({ id: targetId, email: authUser.user.email, defaultPassword });
 });
 
 // DELETE /api/members/:id/  (Chair only) — blocked by the database if the

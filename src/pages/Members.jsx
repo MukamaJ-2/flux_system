@@ -14,7 +14,7 @@ export default function Members() {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [invited, setInvited] = useState(null)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [linkModal, setLinkModal] = useState(null) // { email, link } — reset-password link
+  const [linkModal, setLinkModal] = useState(null) // { email, defaultPassword } — reset-password result
   const [deleteError, setDeleteError] = useState('')
 
   function authHeaders() {
@@ -210,19 +210,19 @@ export default function Members() {
                 <div className="modal-icon success">✅</div>
                 <h3 className="modal-title">Member Created</h3>
                 <p className="modal-body">
-                  Share this link with <strong>{invited.email}</strong> directly — it lets them set
-                  their own password. (Sent by hand, not email, so it works even when email delivery
-                  is rate-limited.)
+                  Share this password with <strong>{invited.email}</strong> directly (WhatsApp, SMS,
+                  in person). They'll sign in with it and be prompted to set their own password
+                  immediately — no email involved.
                 </p>
-                <div className="card-box" style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: '0.75rem' }}>
-                  {invited.link}
+                <div className="card-box" style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.75rem' }}>
+                  {invited.defaultPassword}
                 </div>
                 <div className="modal-actions">
                   <button
                     className="btn secondary"
-                    onClick={() => { navigator.clipboard.writeText(invited.link); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000) }}
+                    onClick={() => { navigator.clipboard.writeText(invited.defaultPassword); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000) }}
                   >
-                    {linkCopied ? 'Copied' : 'Copy Link'}
+                    {linkCopied ? 'Copied' : 'Copy Password'}
                   </button>
                   <button className="btn" onClick={closeInviteModal}>Done</button>
                 </div>
@@ -277,15 +277,16 @@ export default function Members() {
         <div className="modal-overlay" onClick={() => setLinkModal(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-icon success">🔑</div>
-            <h3 className="modal-title">Password Reset Link</h3>
+            <h3 className="modal-title">New Password</h3>
             <p className="modal-body">
-              Share this link with <strong>{linkModal.email}</strong> — it lets them set a new password.
+              Share this with <strong>{linkModal.email}</strong> — they'll sign in with it and be
+              prompted to set their own password right away.
             </p>
-            <div className="card-box" style={{ wordBreak: 'break-all', fontSize: '0.85rem', marginTop: '0.75rem' }}>
-              {linkModal.link}
+            <div className="card-box" style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.75rem' }}>
+              {linkModal.defaultPassword}
             </div>
             <div className="modal-actions">
-              <button className="btn secondary" onClick={() => navigator.clipboard.writeText(linkModal.link)}>Copy Link</button>
+              <button className="btn secondary" onClick={() => navigator.clipboard.writeText(linkModal.defaultPassword)}>Copy Password</button>
               <button className="btn" onClick={() => setLinkModal(null)}>Done</button>
             </div>
           </div>
