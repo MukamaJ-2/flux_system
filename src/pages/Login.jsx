@@ -9,6 +9,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [reveal, setReveal] = useState(false)
 
   const from = location.state?.from?.pathname || '/'
 
@@ -67,14 +68,25 @@ export default function Login() {
             </div>
             <div className="field-group">
               <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="password"
+                  type={reveal ? 'text' : 'password'}
+                  style={{ paddingRight: '44px' }}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setReveal((v) => !v)}
+                  aria-label={reveal ? 'Hide password' : 'Show password'}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '4px' }}
+                >
+                  {reveal ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
             <button type="submit" className="btn full" disabled={loading}>
               {loading ? <span className="spinner" /> : 'Sign In'}
