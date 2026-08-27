@@ -15,11 +15,13 @@ const NAV_LINKS = [
 ]
 
 export default function Sidebar() {
-  const { session, profile, signOut } = useAuth()
+  const { session, profile, mustSetPassword, signOut } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
 
-  if (!session) return null
+  // Nothing here — including which panels a role unlocks — should be
+  // visible until the forced first-login password change is done.
+  if (!session || mustSetPassword) return null
 
   function handleSignOut() {
     signOut()

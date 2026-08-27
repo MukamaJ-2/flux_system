@@ -16,7 +16,7 @@ const TITLES = {
 }
 
 export default function TopBar() {
-  const { session, profile } = useAuth()
+  const { session, profile, mustSetPassword } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
@@ -24,7 +24,9 @@ export default function TopBar() {
   const title = TITLES[location.pathname] || 'FLUX'
   const canGoBack = !Object.keys(TITLES).includes(location.pathname)
 
-  if (!session) return null
+  // Same reasoning as Sidebar — the name/role badge shouldn't show until
+  // the forced first-login password change is done.
+  if (!session || mustSetPassword) return null
 
   return (
     <header className="topbar">
