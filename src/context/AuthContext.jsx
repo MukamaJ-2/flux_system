@@ -76,15 +76,23 @@ export function AuthProvider({ children }) {
       },
 
       setPassword: async (newPassword) => {
-        const { data, error } = await supabase.auth.updateUser({ password: newPassword })
+        const { error } = await supabase.auth.updateUser({ password: newPassword })
         if (error) return { success: false, error: error.message }
-        // Clear the forced-change flag server-side, then refetch the
-        // profile so `mustSetPassword` (derived from it) updates too.
-        await fetch(`${API_URL}/me/confirm-password-change/`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: SUPABASE_ANON_KEY },
-        }).catch(() => {})
-        await fetchProfile(data.session.access_token)
+        // updateUser()'s response has no `session` (only `user`) — use the
+        // current session already held in this context instead. Wrapped so
+        // a network hiccup here can never leave the caller's loading state
+        // stuck (that's exactly what a bare crash here did before).
+        try {
+          if (session) {
+            await fetch(`${API_URL}/me/confirm-password-change/`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_ANON_KEY },
+            })
+            await fetchProfile(session.access_token)
+          }
+        } catch (e) {
+          console.error('Failed to confirm password change', e)
+        }
         return { success: true }
       },
 

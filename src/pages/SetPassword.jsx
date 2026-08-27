@@ -24,13 +24,20 @@ export default function SetPassword() {
     }
 
     setLoading(true)
-    const result = await setPassword(newPassword)
-    if (result.success) {
-      navigate('/')
-    } else {
-      setError(result.error || 'Failed to set password.')
+    try {
+      const result = await setPassword(newPassword)
+      if (result.success) {
+        navigate('/')
+      } else {
+        setError(result.error || 'Failed to set password.')
+      }
+    } catch (e) {
+      // Belt-and-braces: an unexpected throw here must never leave the
+      // button stuck spinning forever.
+      setError(e.message || 'Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
