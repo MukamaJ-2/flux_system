@@ -9,6 +9,7 @@ export default function SetPassword() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [reveal, setReveal] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -65,22 +66,33 @@ export default function SetPassword() {
           <form className="auth-form" onSubmit={handleSubmit}>
             <div className="field-group">
               <label htmlFor="newPassword">New Password *</label>
-              <input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min. 8 characters"
-                required
-                autoFocus
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="newPassword"
+                  type={reveal ? 'text' : 'password'}
+                  style={{ paddingRight: '44px' }}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 8 characters"
+                  required
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setReveal((v) => !v)}
+                  aria-label={reveal ? 'Hide passwords' : 'Show passwords'}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '4px' }}
+                >
+                  {reveal ? '🙈' : '👁'}
+                </button>
+              </div>
             </div>
 
             <div className="field-group">
               <label htmlFor="confirmPassword">Confirm Password *</label>
               <input
                 id="confirmPassword"
-                type="password"
+                type={reveal ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your new password"

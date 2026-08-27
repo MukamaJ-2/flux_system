@@ -3,12 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Profile() {
-  const { profile, signOut, updateProfile } = useAuth()
+  const { profile, signOut, updateProfile, setPassword } = useAuth()
   const navigate = useNavigate()
   const [showLogout, setShowLogout] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ fullName: profile?.fullName || '', phone: profile?.phone || '' })
   const [editMsg, setEditMsg] = useState('')
+
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ newPassword: '', confirmPassword: '' })
+  const [passwordMsg, setPasswordMsg] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [revealPasswords, setRevealPasswords] = useState(false)
 
   function handleSignOut() {
     signOut()
@@ -25,6 +32,35 @@ export default function Profile() {
       setTimeout(() => setEditMsg(''), 3000)
     } else {
       setEditMsg(result?.error || 'Failed to update profile.')
+    }
+  }
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault()
+    setPasswordError('')
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.')
+      return
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Passwords do not match.')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      const result = await setPassword(passwordForm.newPassword)
+      if (result.success) {
+        setChangingPassword(false)
+        setPasswordForm({ newPassword: '', confirmPassword: '' })
+        setPasswordMsg('Password changed successfully.')
+        setTimeout(() => setPasswordMsg(''), 3000)
+      } else {
+        setPasswordError(result.error || 'Failed to change password.')
+      }
+    } catch (err) {
+      setPasswordError(err.message || 'Something went wrong. Please try again.')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -71,6 +107,62 @@ export default function Profile() {
           <div className="info-row"><span className="muted">Email</span><strong>{profile?.email}</strong></div>
           {profile?.phone && <div className="info-row"><span className="muted">Phone</span><strong>{profile?.phone}</strong></div>}
           <div className="info-row"><span className="muted">Roles</span><strong>{(profile?.roles || []).join(', ') || 'Member'}</strong></div>
+        </div>
+      </div>
+
+      <div className="section-block">
+        <div className="section-heading"><span>Password</span></div>
+        <div className="card-box">
+          {passwordMsg && <div className="alert alert-success">{passwordMsg}</div>}
+          {!changingPassword ? (
+            <button className="btn secondary" onClick={() => { setChangingPassword(true); setPasswordError('') }}>
+              Change Password
+            </button>
+          ) : (
+            <form onSubmit={handleChangePassword} className="flux-form">
+              {passwordError && <div className="alert alert-danger"><span>⚠</span> {passwordError}</div>}
+              <div className="form-group">
+                <label>New Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={revealPasswords ? 'text' : 'password'}
+                    className="form-input"
+                    style={{ paddingRight: '44px' }}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                    placeholder="Min. 8 characters"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setRevealPasswords((v) => !v)}
+                    aria-label={revealPasswords ? 'Hide passwords' : 'Show passwords'}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', padding: '4px' }}
+                  >
+                    {revealPasswords ? '🙈' : '👁'}
+                  </button>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Confirm New Password</label>
+                <input
+                  type={revealPasswords ? 'text' : 'password'}
+                  className="form-input"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  placeholder="Repeat your new password"
+                />
+              </div>
+              <div className="req-actions">
+                <button type="button" className="btn secondary" onClick={() => { setChangingPassword(false); setPasswordForm({ newPassword: '', confirmPassword: '' }); setPasswordError('') }}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn primary" disabled={passwordSaving}>
+                  {passwordSaving ? <span className="spinner sm" /> : 'Save New Password'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 
