@@ -94,7 +94,7 @@ export default function Login() {
           </form>
 
           <p className="text-sm text-muted" style={{ marginTop: '16px', textAlign: 'center' }}>
-            Forgot your password? Ask your Chair to reset it from the Members page.
+            Forgot your password? Ask your Adminstrator to assist you.
           </p>
         </div>
 
